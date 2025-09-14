@@ -1,9 +1,12 @@
+
+# RStudio
 .Ruserdata
 .Rhistory
 .Rproj.user/
 .RData
-renv/library/
-models/
-data/processed/
 .DS_Store
-/datasets
+datasets/
+models/
+
+# renv
+renv/library/
