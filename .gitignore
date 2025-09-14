@@ -6,3 +6,4 @@ renv/library/
 models/
 data/processed/
 .DS_Store
+/datasets
