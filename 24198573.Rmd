@@ -1,0 +1,408 @@
+---
+title: 'CITS4009_Project_24198573'
+author: 'Jonas Liu'
+student_ID: '24198573'
+date: '2025-09-14'
+output: html_document
+---
+
+# Environment Establishing
+```{r setup, include=FALSE}
+set.seed(2025)
+library(tidyverse); library(janitor); library(skimr); library(naniar); library(gridExtra)
+library(GGally); library(tidymodels); library(pROC); library(yardstick);library(countrycode)
+library(zoo); library(rpart); library(caret); library(rpart.plot)
+```
+
+# 1. Introduction
+
+This is an individual project of CITS4009. This project aims to complete exploratory data analytics and predictive modelling for the given data.
+
+# 2. Descriptive Analysis of the Data
+
+This part aims to show some descriptive analysis of the given data.
+
+```{r reading data}
+box_office <- read.csv("datasets/raw/Box_office_data_2000_2024.csv")
+gdp <- read.csv("datasets/raw/GDP_2020_2024.csv")
+population <- read.csv("datasets/raw/Population_2000_2024.csv")
+```
+
+```{r details of box_office, echo=FALSE}
+str(box_office)
+summary(box_office)
+head(box_office, 10)
+```
+Overall, there are 5000 observations with 13 variables. The minimum values of variable X.Domestic and X.Foreign are both 0, which is unusual.Moreover, the maximum values of the two variables are significantly higher than other records. The values of X.Foreign is generally higher than the values of X.Domestic. Since Genres, Rating, Original_Language, and Production_Countries are stored as character variables rather than factors, the summary() function does not display category counts. In addition, there are 170 missing values in variable Vote_Count.
+
+```{r details of gdp, echo=FALSE}
+str(gdp)
+summary(gdp)
+head(gdp, 10)
+```
+In summary, the GDP dataset contains 266 observations with 29 variables, including country information and yearly GDP values from 2000 to 2024. The variables Country.Name, Country.Code,  Indicator.Name and Indicator.Code are all stored as character. Each year contains around 10 missing values while 2024 has the most missing values, with 35. There is also a general upward trend in global GDP over time.
+
+```{r details of population, echo=FALSE}
+str(population)
+summary(population)
+head(population, 10)
+```
+Given that almost all variables are stored as character strings rather than numeric values, the summary() function can't give any useful information. In the meantime, head() shows that this is due to the use of formatting symbols such as commas and placeholder entries like “--”, which prevent direct numeric interpretation. This problem will be addressed in Data Cleaning and Transformation part.
+
+# 3. Visualisation
+
+This part visualizes the three datasets to explore the potential information by using different types of plots and charts.
+```{r single variable exploration, echo=FALSE}
+# Worldwide Box_office distribution
+ggplot(box_office, aes(x = X.Worldwide/1e6)) +
+  geom_histogram(bins = 30, fill="skyblue", color="black") +
+  labs(title = "Worldwide Box_office Distribution", x = "Box_office (million dollars)", y = "Nums of Movies")
+
+# Worldwide Box_office over years
+box_office %>%
+  group_by(Year) %>%
+  summarise(total_worldwide = sum(X.Worldwide, na.rm=TRUE)) %>% 
+  ggplot(aes(x = Year, y = total_worldwide/1e9)) +
+  geom_line(color="darkgreen") +
+  geom_point() +
+  labs(title = "Worldwide Box_office over Years", x = "Year", y = "Box_office (billion dollars)")
+```
+Worldwide Box Office Distribution:
+There is a highly skewed distribution with a long right tail in the histogram.The majority of movies earn relatively low worldwide box office revenues, concentrated under a few hundred million dollars. Only a small number of movies exceed the one-billion-dollar mark. This suggests that while popular movies dominate total revenue, most films achieve only modest earnings.
+
+Box Office Trend over Years:
+From 2000 to around 2019, global box office revenue shows a clear upward trend, reflecting the overall growth of the film industry and international market expansion. But there is a sharp slump from 2019 to 2020 with the impact of the COVID-19 pandemic, which severely reduced cinema attendance and box office income. After 2020, there is a noticeable recovery. However, there comes a abrupt decline again in 2024.
+
+```{r multiple variables exploration, echo=FALSE}
+# GDP & Population (2024)
+gdp2024 <- gdp %>% select(Country.Name, X2024)
+colnames(gdp2024)[2] <- "GDP_2024"
+
+df2024 <- pop_latest %>%
+  select(Name, Population) %>%
+  mutate(Population = as.numeric(gsub(",", "", Population))) %>%
+  inner_join(gdp2024, by=c("Name"="Country.Name"))
+
+p1 <- ggplot(df2024, aes(x = Population/1e6, y = GDP_2024/1e9)) +
+  geom_point(alpha=0.6, color="blue") +
+  scale_x_log10() + scale_y_log10() +
+  labs(title="GDP VS Population (2024)", x="Population (million, log)", y="GDP (billion dollars, log)")
+
+# GDP & Box_office (Group by countries, 2024)
+box_country <- box_office %>%
+  group_by(Production_Countries) %>%
+  summarise(total_box = sum(X.Worldwide, na.rm=TRUE))
+
+df_join <- inner_join(box_country, gdp2024, by=c("Production_Countries"="Country.Name"))
+
+p2 <- ggplot(df_join, aes(x = GDP_2024/1e9, y = total_box/1e9)) +
+  geom_point(color="darkgreen") +
+  labs(title="GDP VS  Box_office (2024)", x="GDP (group by countries, billion)", y="Box office (billion dollars)")
+
+grid.arrange(p1, p2, ncol=2)
+
+```
+GDP vs Population (2024):
+In the scatter plot, a log–log scale is applied to reduce skewness and better visualise the wide range of values.The plot shows a clear positive correlation between population size and GDP. Countries with larger populations tend to have higher GDP, although the relationship is not totally linear since some small-population countries achieve relatively high GDP. Additionally, there is also a clustered pattern: most countries fall into the lower-middle range, while only a few lie on the upper-right corner and the lower-left corner.
+
+GDP vs Box Office (2024, by Production Country):
+A general upward trend is observed: countries with higher GDP also tend to contribute more to global box office revenues. However, the distribution is highly concentrated in the lower-left corner, with only a few countries generating the majority of box office income.
+
+```{r categorical variables exploration, echo=FALSE}
+# Global average box office revenue among different genres
+box_office %>%
+  separate_rows(Genres, sep=", ") %>%
+  filter(Genres != "" & !is.na(Genres)) %>%
+  group_by(Genres) %>%
+  summarise(avg_worldwide = mean(X.Worldwide, na.rm=TRUE)) %>%
+  ggplot(aes(x=reorder(Genres, -avg_worldwide), y=avg_worldwide/1e6)) +
+  geom_bar(stat="identity", fill="violet", color="black") +
+  coord_flip() +
+  labs(title="Global Average Box Office Revenue among Different Genres", x="Movie genres", y="Average box office (million)")
+
+# Domestic average box office revenue among different genres
+box_office %>%
+  separate_rows(Genres, sep=", ") %>%
+  filter(Genres != "" & !is.na(Genres)) %>%
+  group_by(Genres) %>%
+  summarise(avg_Domestic = mean(X.Domestic, na.rm=TRUE)) %>%
+  ggplot(aes(x=reorder(Genres, -avg_Domestic), y=avg_Domestic/1e6)) +
+  geom_bar(stat="identity", fill="yellowgreen", color="black") +
+  coord_flip() +
+  labs(title="Domestic Average Box Office Revenue among Different Genres", x="Movie genres", y="Average box office (million)")
+```
+Global Trends:  
+At the global level, genres such as Science Fiction, Adventure, and Fantasy, demonstrate their dominance in generating box office revenues. In contrast, genres like Documentary, TV Movie, and Drama, are not so popular with the lowest revenues. 
+
+Domestic Trends:
+A similar pattern is observed domestically, though the overall revenue levels are significantly smaller compared to the global scale. Science Fiction, Adventure, and Family films perform the best, while TV Movie are extremely low-profit.
+
+Comparison:
+What's interesting is that certain genres such as Western, Family, and Horror appear relatively stronger in domestic markets compared to their global averages. In contrast, the popularity of war movies has a obvious decline in domestic markets.
+
+# 4. Data Cleaning and Transformation
+
+Based on the former steps, there are some identified problems in the datasets.  This part concentrates on cleaning data and transforming data into a more practicable format.
+
+## 4.1 Missing Values Preview
+
+```{r missing values overview, echo=FALSE}
+naniar::gg_miss_var(box_office, show_pct = TRUE) +
+  labs(title = "Box Office: Missing by Variable (%)")
+
+naniar::gg_miss_var(gdp, show_pct = TRUE) +
+  labs(title = "GDP: Missing by Variable (%)")
+
+naniar::gg_miss_var(population, show_pct = TRUE) +
+  labs(title = "Population: Missing by Variable (%)")
+```
+Box_Office: Only the Vote_Count variable shows missing values (~3%), while all other variables are nearly complete.
+
+GDP: There are 5–12% missing values in several year columns, with the latest year (2024) showing the highest proportion.
+
+Population: Almost all variables are complete (<0.5% missing).
+
+## 4.2 Data Transformation
+
+According to former parts, some values in tables have incorrect format. The first thing is to filter some rows with invalid key columns, and replace "--/NA/null" with NA. Then the numbers in the character variables are converted to actual numerical values. Additionally, some columns like country name and country code have been standardized in order to match with other table.
+
+Besides, there is a new aggregation box office table based on country_code and year. A long table is generated for gdp.
+
+```{r Data Transformation, echo=FALSE}
+# clean population
+population_clean <- population %>%
+  filter(!str_detect(Name, "^\\s*->")) %>%
+  mutate(across(everything(), ~str_squish(.x))) %>% 
+  mutate(across(everything(), ~replace(.x, .x %in% c("", "--"), NA))) %>%
+  mutate(across(!c(Name, GENC, Year), ~readr::parse_number(.x), .names = "{.col}")) %>% 
+  mutate(Year = as.integer(Year)) %>%
+  mutate(
+    Country_Code = countrycode(GENC, origin = "iso2c", destination = "iso3c")
+  ) %>%
+  rename(Country_Name = "Name") %>% 
+  select(Country_Name, Country_Code, everything(), -GENC)
+
+# clean box_office
+box_office_clean <- box_office %>%
+  mutate(across(where(is.character), ~na_if(.x, ""))) %>%
+  mutate(across(where(is.character), str_trim)) %>%
+  mutate(Rating_num = readr::parse_number(Rating)) %>%
+  distinct() # remove possible duplicates
+
+# aggregate box_office by country code x year
+box_office_aggr <- box_office_clean %>%
+  transmute(
+    production_country = Production_Countries,
+    worldwide_usd = X.Worldwide,
+    Year = Year,
+    domestic_usd = X.Domestic
+  ) %>%
+  # separate production countries
+  separate_rows(production_country, sep = ",") %>%
+  mutate(production_country = str_trim(production_country)) %>%
+  # replace country names with country codes
+  mutate(
+    Country_Code = countrycode(production_country, "country.name", "iso3c", warn = FALSE)
+  ) %>%
+  group_by(Country_Code, Year) %>%
+  summarise(
+    n_films             = n(),
+    worldwide_usd_sum   = sum(worldwide_usd, na.rm = TRUE),
+    domestic_usd_sum    = sum(domestic_usd,  na.rm = TRUE),
+    domestic_share      = if_else(worldwide_usd_sum > 0, domestic_usd_sum/worldwide_usd_sum, NA_real_),
+    .groups = "drop"
+  )
+
+# clean gdp
+gdp_clean <- gdp %>%
+  mutate(across(where(is.character), ~na_if(.x, ""))) %>%
+  mutate(across(where(is.character), ~na_if(.x, "--"))) %>%
+  rename_with(~ str_remove(.x, "^X"), starts_with("X")) %>%    # columns like "x2000" -> "2000"
+  rename(Country_Name = "Country.Name", Country_Code = "Country.Code") %>%
+  distinct()
+
+year_cols <- grep("^\\d{4}$", names(gdp_clean), value = TRUE)
+
+# transform gdp to long table
+gdp_long <- gdp_clean %>%  
+  pivot_longer(all_of(year_cols), names_to = "Year", values_to = "gdp_usd") %>%
+  mutate(
+    Year = as.integer(Year)
+  )
+
+# check tables
+str(box_office_clean)
+head(box_office_aggr, 10)
+str(population_clean)
+head(population_clean, 10)
+str(gdp_clean)
+head(gdp_long, 10)
+```
+
+## 4.3 Missing Values Operation
+
+```{r Missing values after data transformation, echo=FALSE}
+naniar::gg_miss_var(box_office_aggr, show_pct = TRUE) +
+  labs(title = "Box_office_aggr: Missing by Variable (%)")
+
+naniar::gg_miss_var(gdp_long, show_pct = TRUE) +
+  labs(title = "GDP_long: Missing by Variable (%)")
+
+naniar::gg_miss_var(population_clean, show_pct = TRUE) +
+  labs(title = "Population_clean: Missing by Variable (%)")
+```
+As depicted in the images, rows without country_code account for 3% in box_office_aggr table and 1.8% in population_clean table. And there are several variables with a few missing percent in population_clean table. All rows with NA in the two tables were removed. The result shows more than 95% rows were left.
+
+In gdp_long table, time-series based imputation was applied to handle missing values of gdp_usd. Specifically, linear interpolation was used within each country across years, while for trailing missing values, last observation carried forward was applied. At last, rows which were still NA after interpolation were removed(account for less than 2.5%).
+```{r Missing Values Handling, echo=FALSE}
+# 
+population_clean2 <- population_clean %>% 
+  drop_na()
+
+box_office_aggr2 <- box_office_aggr %>%
+  filter(!is.na(Country_Code))
+
+
+gdp_long2 <- gdp_long %>%
+  group_by(Country_Code) %>%
+  arrange(Year, .by_group = TRUE) %>%
+  mutate(gdp_usd = na.approx(gdp_usd, x = Year, na.rm = FALSE)) %>%
+  mutate(gdp_usd = na.locf(gdp_usd, na.rm = FALSE)) %>%
+  ungroup() %>%
+  filter(!is.na(gdp_usd))
+```
+
+```{r percentage of remained rows, echo=FALSE}
+per_box_left <- nrow(box_office_aggr2) / nrow(box_office_aggr)  * 100
+per_gdp_left <- nrow(gdp_long2) / nrow(gdp_long)  * 100
+per_pop_left <- nrow(population_clean2) / nrow(population)  * 100
+
+cat(
+  paste("Box Office :", round(per_box_left, 2), "%left\n"),
+  paste("GDP :", round(per_gdp_left, 2), "%left\n"),
+  paste("Population :", round(per_pop_left, 2), "%left\n")
+)
+```
+
+## 4.4 Establishing a panel
+
+Since all data was cleaned, a comprehensive panel was generated by merging tabels based on country code and year. 
+```{r panel establishment}
+panel <- box_office_aggr2 %>%
+  left_join(gdp_long2, by = c("Country_Code","Year")) %>%
+  left_join(population_clean2, by = c("Country_Code","Year")) %>%
+  drop_na() %>%
+  
+  # extra attributes
+  mutate(
+    gdp_per_capita = gdp_usd / Population,
+    box_per_capita  = worldwide_usd_sum / Population,
+    box_gdp_ratio   = worldwide_usd_sum / gdp_usd,
+    log_gdp        = if_else(gdp_usd > 0, log10(gdp_usd), NA_real_),
+    log_pop        = if_else(Population > 0, log10(Population), NA_real_),
+    log_box_sum     = if_else(worldwide_usd_sum > 0, log10(worldwide_usd_sum), NA_real_),
+    log_gdp_pc     = if_else(gdp_per_capita > 0, log10(gdp_per_capita), NA_real_)
+  )
+
+head(panel, 20)
+```
+
+```{r save processed data}
+readr::write_csv(panel, "datasets/processed/panel.csv")
+```
+
+# 5. Classification, Feature Engineering, and Feature Selection
+
+## 5.1 Feature Engineering and Selection
+
+In panel table, box_per_capita is chosen as response variable, since it could reflect the size of box office market across different countries more fairly. Then the median is used as the threshold to divide countries into High and Low categories, avoiding the influence of some extreme values on the results.
+```{r Feature Engineering, echo=FALSE}
+threshold <- median(panel$box_per_capita, na.rm = TRUE)
+
+panel$box_class <- ifelse(panel$box_per_capita > threshold, "High", "Low")
+
+table(panel$box_class)
+```
+
+A subset of the most relevant features is selected for the classification task.Removed useless variables such as unique identifiers (Country_Code, Year) and redundant text columns (Country_Name). Features, related to economic development (gdp_usd, gdp_per_capita), population (Population), and social indicators (Life Expectancy), are kept for next step. Moreover, variables that may cause collinearity are discarded, for example, keeping only Population instead of Male.Population and Female.Population. Log-transformed variables (log_gdp, log_pop) are included to reduce skewness and stabilize variance. This generates a balanced feature set that combines economic, demographic, and social factors without redundancy.
+```{r Feature Selection, echo=FALSE}
+panel_selected <- panel %>%
+  select(
+    gdp_usd,
+    gdp_per_capita,
+    Population,   
+    Life.Expectancy.at.Birth..Both.Sexes,
+    Total.Fertility.Rate, 
+    box_gdp_ratio,
+    log_gdp,
+    log_pop
+  )
+
+panel_selected$box_class <- panel$box_class
+head(panel_selected,10)
+```
+```{r save processed data}
+readr::write_csv(panel_selected, "datasets/processed/panel_selected.csv")
+```
+
+## 5.2 Classification Modelling
+
+Training/Test Split: We used an 80/20 split to evaluate model performance on unseen data. Merge rare countries into "OTHER" (count < 3)
+```{r Classification, echo=FALSE}
+panel_selected$box_class <- factor(panel_selected$box_class, levels = c("High", "Low"))
+set.seed(119)
+train_index <- createDataPartition(panel_selected$box_class, p = 0.8, list = FALSE)
+train_data <- panel_selected[train_index, ]
+test_data <- panel_selected[-train_index, ]
+table(train_data$box_class)
+table(test_data$box_class)
+
+```
+
+Two classification models are implemented: decision tree and logistic regression.
+
+Decision Tree: The tree structure provides interpretable decision rules.
+```{r Decision Tree, echo=FALSE}
+dt_model <- rpart(box_class ~ ., data = train_data, method = "class")
+
+rpart.plot(dt_model)
+
+dt_pred <- predict(dt_model, test_data, type = "class")
+
+confusionMatrix(dt_pred, test_data$box_class)
+```
+The decision tree model shows that box_office-GDP ratio and GDP per capita are the most influential features in distinguishing between High and Low categories. Countries with higher box office-GDP ratio and higher GDP per capita tend to be classified as High.
+
+The confusion matrix indicates that the model's performance has an overall accuracy of 94.2% and a Kappa value of 0.88, suggesting a relatively strong stability. Both sensitivity (92.8%) and specificity (95.7%) are high, meaning the model effectively identifies both High and Low cases. This means that the decision tree provides a robust and well-generalized classifier for this dataset.
+
+Logistic Regression: A linear model suitable for binary classification.
+```{r Logistic Regression, echo=FALSE}
+log_model <- glm(box_class ~ ., data = train_data, family = "binomial")
+
+log_prob <- predict(log_model, test_data, type = "response")
+log_pred <- ifelse(log_prob < 0.5, "High", "Low")
+log_pred <- factor(log_pred, levels = levels(test_data$box_class))
+
+confusionMatrix(log_pred, test_data$box_class)
+```
+According to the results, the logistic regression model achieved a high performance, with an accuracy of 97.1% and a Kappa of 0.94, indicating excellent agreement beyond chance. Sensitivity (95.7%) and specificity (98.6%) are both high, showing that the model is effective at detecting both High and Low classes, as well as a very good precision value (above 95%). Overall, the logistic regression classifier provides a highly reliable model for distinguishing between High and Low cases in this dataset.
+
+Model performance was evaluated using confusion matrices and ROC curves. Thus, it is more visual to compare accuracy and the trade-off between true positive and false positive rates.
+```{r performance comparison, echo=FALSE}
+dt_prob <- predict(dt_model, test_data, type = "prob")[,2]
+roc_dt  <- roc(test_data$box_class, dt_prob, levels = c("High", "Low"))
+
+roc_log <- roc(test_data$box_class, log_prob, levels = c("High", "Low"))
+
+plot(roc_dt, col="blue", main="ROC Curve: Decision Tree vs Logistic Regression")
+lines(roc_log, col="red")
+legend("bottomright", legend=c("Decision Tree","Logistic Regression"), col=c("blue","red"), lwd=2)
+```
+The ROC curves show that both the decision tree and logistic regression models, with lines close to the top-left corner, perform very well in this dataset. Logistic regression (red) is slightly ahead overall, reaching higher sensitivity at most points. The decision tree (blue) also works well, but logistic regression gives a more steady performance. 
+
+# 6. Conclusion
+
+In this project, I had a comprehensive practice of exploratory analysis, data cleaning, and classification modelling. After constructing a cleaned panel dataset from given datasets, box office per capita was selected as the target variable for classification. Two models were tested: a decision tree and logistic regression. Both methods achieved strong results, with accuracies above 94%. The decision tree provided clear and interpretable rules, while logistic regression delivered slightly better performance overall, reaching 97% accuracy and higher ROC values. These findings suggest that economic and demographic indicators are effectively positive predictors of box office scale across countries. Additionally, logistic regression performed better than decision tree for this dataset.
+
+
+

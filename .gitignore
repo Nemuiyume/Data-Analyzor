@@ -5,8 +5,8 @@
 .Rproj.user/
 .RData
 .DS_Store
-datasets/
 models/
+Reports/
 
 # renv
 renv/library/
