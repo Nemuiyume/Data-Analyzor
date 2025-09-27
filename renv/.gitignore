@@ -5,3 +5,15 @@ lock/
 python/
 sandbox/
 staging/
+
+# RStudio
+.Ruserdata
+.Rhistory
+.Rproj.user/
+.RData
+.DS_Store
+models/
+Reports/
+
+# renv
+renv/library/
