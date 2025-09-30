@@ -1,3 +1,5 @@
+# 24198573
+# Jonas LIU
 
 # Exploratory_Analysis.R
 library(shiny)
@@ -131,7 +133,7 @@ server <- function(input, output, session) {
     
     if (input$uni_geom=="hist" && is.numeric(panel[[v]])) {
       if (input$uni_fill_class && "box_class" %in% names(panel)) {
-        ggplot(panel,aes(x=.data[[v]],fill=box_class)) +
+        ggplot(panel,aes(x=.data[[v]],fill=.data[["box_class"]])) +
           geom_histogram(alpha=0.6,bins=30,position="identity") +
           geom_density(aes(y=after_stat(count)),alpha=0.2) +
           theme_minimal()
@@ -144,7 +146,7 @@ server <- function(input, output, session) {
       
     } else if (input$uni_geom == "density" && is.numeric(panel[[v]])) {
       if (input$uni_fill_class && "box_class" %in% names(panel)) {
-        ggplot(panel, aes(x=.data[[v]], color=box_class, fill=box_class)) +
+        ggplot(panel, aes(x=.data[[v]], color=.data[["box_class"]], fill=.data[["box_class"]])) +
           geom_density(alpha=0.3) + theme_minimal()
       } else {
         ggplot(panel, aes(x=.data[[v]])) +
@@ -152,7 +154,7 @@ server <- function(input, output, session) {
       }
       
     } else if (input$uni_geom=="box" && is.numeric(panel[[v]]) && "box_class" %in% names(panel)) {
-      ggplot(panel,aes(x=box_class,y=.data[[v]],fill=box_class)) +
+      ggplot(panel,aes(x=box_class,y=.data[[v]],fill=.data[["box_class"]])) +
         geom_boxplot() + coord_flip() + theme_minimal()
       
     } else {
@@ -167,7 +169,7 @@ server <- function(input, output, session) {
     
     if (input$bi_geom == "point") {
       if (input$uni_fill_class2) {
-        ggplot(panel, aes(x = .data[[x]], y = .data[[y]], color = box_class)) +
+        ggplot(panel, aes(x = .data[[x]], y = .data[[y]], color = .data[["box_class"]])) +
           geom_point(alpha = 0.7) + theme_minimal()
       } else {
         ggplot(panel, aes(x = .data[[x]], y = .data[[y]])) +
@@ -176,7 +178,7 @@ server <- function(input, output, session) {
       
     } else if (input$bi_geom == "smooth") {
       if (input$uni_fill_class2) {
-        ggplot(panel, aes(x = .data[[x]], y = .data[[y]], color = box_class)) +
+        ggplot(panel, aes(x = .data[[x]], y = .data[[y]], color = .data[["box_class"]])) +
           geom_point(alpha = 0.3) +
           geom_smooth(se = FALSE) + theme_minimal()
       } else {
@@ -186,7 +188,7 @@ server <- function(input, output, session) {
       
     } else if (input$bi_geom == "box2" && !is.numeric(panel[[x]]) && is.numeric(panel[[y]])) {
       if (input$uni_fill_class2) {
-        ggplot(panel, aes(x = .data[[x]], y = .data[[y]], fill = box_class)) +
+        ggplot(panel, aes(x = .data[[x]], y = .data[[y]], fill = .data[["box_class"]])) +
           geom_boxplot(outlier.alpha = 0.5) + coord_flip() + theme_minimal()
       } else {
         ggplot(panel, aes(x = .data[[x]], y = .data[[y]])) +
