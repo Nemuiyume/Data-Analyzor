@@ -312,9 +312,6 @@ panel <- box_office_aggr2 %>%
 head(panel, 20)
 ```
 
-```{r save panel, echo=FALSE}
-readr::write_csv(panel, "datasets/processed/panel.csv")
-```
 
 # 5. Classification, Feature Engineering, and Feature Selection
 
@@ -327,6 +324,9 @@ threshold <- median(panel$box_per_capita, na.rm = TRUE)
 panel$box_class <- ifelse(panel$box_per_capita > threshold, "High", "Low")
 
 table(panel$box_class)
+```
+```{r save panel, echo=FALSE}
+readr::write_csv(panel, "datasets/processed/panel.csv")
 ```
 
 A subset of the most relevant features is selected for the classification task.Removed useless variables such as unique identifiers (Country_Code, Year) and redundant text columns (Country_Name). Features, related to economic development (gdp_usd, gdp_per_capita), population (Population), and social indicators (Life Expectancy), are kept for next step. Moreover, variables that may cause collinearity are discarded, for example, keeping only Population instead of Male.Population and Female.Population. Log-transformed variables (log_gdp, log_pop) are included to reduce skewness and stabilize variance. This generates a balanced feature set that combines economic, demographic, and social factors without redundancy.

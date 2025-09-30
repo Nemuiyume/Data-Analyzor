@@ -154,7 +154,7 @@ server <- function(input, output, session) {
       }
       
     } else if (input$uni_geom=="box" && is.numeric(panel[[v]]) && "box_class" %in% names(panel)) {
-      ggplot(panel,aes(x=box_class,y=.data[[v]],fill=.data[["box_class"]])) +
+      ggplot(panel,aes(x=.data[["box_class"]],y=.data[[v]],fill=.data[["box_class"]])) +
         geom_boxplot() + coord_flip() + theme_minimal()
       
     } else {
