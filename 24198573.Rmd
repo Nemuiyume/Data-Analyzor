@@ -77,8 +77,9 @@ From 2000 to around 2019, global box office revenue shows a clear upward trend, 
 # GDP & Population (2024)
 gdp2024 <- gdp %>% select(Country.Name, X2024)
 colnames(gdp2024)[2] <- "GDP_2024"
+pop_2024 <- population[population$Year==2024, ]
 
-df2024 <- pop_latest %>%
+df2024 <- pop_2024 %>%
   select(Name, Population) %>%
   mutate(Population = as.numeric(gsub(",", "", Population))) %>%
   inner_join(gdp2024, by=c("Name"="Country.Name"))
@@ -307,7 +308,7 @@ panel <- box_office_aggr2 %>%
 head(panel, 20)
 ```
 
-```{r save processed data}
+```{r save panel}
 readr::write_csv(panel, "datasets/processed/panel.csv")
 ```
 
@@ -341,7 +342,7 @@ panel_selected <- panel %>%
 panel_selected$box_class <- panel$box_class
 head(panel_selected,10)
 ```
-```{r save processed data}
+```{r save processed panel}
 readr::write_csv(panel_selected, "datasets/processed/panel_selected.csv")
 ```
 
